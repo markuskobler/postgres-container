@@ -1,0 +1,31 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: alpine:3.5
+        environment:
+          PG_MAJOR: 9.6
+          PG_VERSION: 9.6.2
+          PG_SHA256: 0187b5184be1c09034e74e44761505e52357248451b0c854dddec6c231fe50c9
+    working_directory: "/container"
+    steps:
+      - checkout
+      - restore_cache:
+          key: postgres-container-{{ .Branch }}
+      - run:
+          name: Build postgres
+          command: |
+            apk add --no-cache --no-progress ca-certificates openssl tar bison coreutils flex gcc libc-dev libedit-dev libxml2-dev libxslt-dev make openssl-dev perl util-linux-dev zlib-dev
+            wget -O postgresql.tar.bz2 "https://ftp.postgresql.org/pub/source/v$PG_VERSION/postgresql-$PG_VERSION.tar.bz2"
+            echo "$PG_SHA256 *postgresql.tar.bz2" | sha256sum -c -
+            mkdir -p /usr/src/postgresql
+            tar --extract --file postgresql.tar.bz2 --directory /usr/src/postgresql --strip-components 1
+            rm postgresql.tar.bz2          
+            cd /usr/src/postgresql
+            awk '$1 == "#define" && $2 == "DEFAULT_PGSOCKET_DIR" && $3 == "\"/tmp\"" { $3 = "\"/var/run/postgresql\""; print; next } { print }' src/include/pg_config_manual.h > src/include/pg_config_manual.h.new
+            grep '/var/run/postgresql' src/include/pg_config_manual.h.new
+            mv src/include/pg_config_manual.h.new src/include/pg_config_manual.h
+            ./configure --enable-integer-datetimes --enable-thread-safety --enable-tap-tests --disable-rpath --with-uuid=e2fs --with-gnu-ld --with-pgport=5432 --with-system-tzdata=/usr/share/zoneinfo --with-openssl --with-libxml --with-libxslt --prefix=/opt/local --with-includes=/opt/local/include --with-libraries=/opt/local/lib
+            make -j "$(nproc)" world
+            make install-world
+            make -C contrib install
