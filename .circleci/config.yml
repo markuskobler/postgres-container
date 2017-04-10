@@ -10,8 +10,8 @@ jobs:
     working_directory: "/container"
     steps:
       - checkout
-      - restore_cache:
-          key: postgres-container-{{ .Branch }}
+      # - restore_cache:
+      #     key: postgres-container-{{ .Branch }}
       - run:
           name: Build postgres
           command: |
@@ -29,3 +29,17 @@ jobs:
             make -j "$(nproc)" world
             make install-world
             make -C contrib install
+            rm -rf /opt/local/share/doc /opt/local/share/man
+            find /opt/local -name '*.a' -delete
+      - run:
+          name: Runtime Container
+          command: |
+            wget -O acbuild.tar.gz "https://github.com/containers/build/releases/download/v0.4.0/acbuild-v0.4.0.tar.gz"
+            mkdir -p /root/bin
+            tar -xzf acbuild.tar.gz --strip-components=1 -C /root/bin
+            export PATH=/root/bin:$PATH
+            echo "acbuild..."
+
+            # runDeps="$( scanelf --needed --nobanner --recursive /usr/local | awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }' | sort -u | xargs -r apk info --installed | sort -u )"
+            # apk add --no-cache --no-progress $runDeps bash su-exec tzdata
+            
